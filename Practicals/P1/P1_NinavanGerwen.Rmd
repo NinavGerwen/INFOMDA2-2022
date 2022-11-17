@@ -1,0 +1,78 @@
+---
+title: "Practical 1"
+author: "Nina van Gerwen (1860852)"
+date: "2022-11-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(glmnet)
+```
+
+
+## 2: Take home exercise
+
+### 2.1: Gene expression data
+
+#### Q1: Exploring the data
+
+```{r Q1}
+gene_data <- read_rds("Data/gene_expressions.rds")
+```
+
+The data has a sample size of 237 observations (N) and it has information about
+54676 variables (P). In other words P is much larger than N, which is indicative
+that the data is high-dimensional.
+
+#### Q2: Creating histograms
+
+```{r Q2}
+par(mfrow = c(2, 3))
+  
+for(i in 2:7){
+  gene_data[, i] %>%
+    unlist(.) %>%
+    as.numeric(.) %>%
+    hist(.)
+}
+
+```
+
+Inspecting the histograms of the first six variablse, we see that all but
+one (the fifth variable) seem to follow a normal distribution. Furthermore, the means all seem to be different.
+
+#### Q3: Labeling the data
+
+```{r Q3}
+final_data <- read_rds("Data/phenotypes.rds") %>%
+  select(sample, disease) %>%
+  full_join(x = ., y = gene_data, by = "sample")
+```
+
+
+#### Q4: Class imbalance
+
+```{r Q4}
+final_data$disease %>%
+  as.factor(.) %>%
+  summary(.)
+```
+There is no class imbalance, as the two categories seem to be evenly balanced.
+
+#### Q5: Splitting the data
+
+```{r Q5}
+set.seed(1248)
+
+final_data$split <- sample(c("train", "test"), size = nrow(final_data), 
+                           replace = TRUE, prob = c(0.8, 0.2))
+
+train_data <- final_data %>% subset(split == "train", -split)
+test_data <- final_data %>% subset(split == "test", -split)
+```
+
