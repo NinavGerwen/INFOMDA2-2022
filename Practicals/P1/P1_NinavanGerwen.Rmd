@@ -22,7 +22,7 @@ library(glmnet)
 #### Q1: Exploring the data
 
 ```{r Q1}
-gene_data <- read_rds("Data/gene_expressions.rds")
+gene_data <- read_rds("Data/gene_expressions.rds") %>% as.data.frame(.)
 ```
 
 The data has a sample size of 237 observations (N) and it has information about
@@ -36,9 +36,7 @@ par(mfrow = c(2, 3))
   
 for(i in 2:7){
   gene_data[, i] %>%
-    unlist(.) %>%
-    as.numeric(.) %>%
-    hist(.)
+    hist(., main = colnames(gene_data)[i])
 }
 
 ```
@@ -72,7 +70,124 @@ set.seed(1248)
 final_data$split <- sample(c("train", "test"), size = nrow(final_data), 
                            replace = TRUE, prob = c(0.8, 0.2))
 
-train_data <- final_data %>% subset(split == "train", -split)
-test_data <- final_data %>% subset(split == "test", -split)
+train_data <- final_data %>% subset(split == "train", -split) %>%
+  mutate(disease = as.factor(disease)) %>% as.data.frame(.)
+test_data <- final_data %>% subset(split == "test", -split) %>%
+  mutate(disease = as.factor(disease)) %>% as.data.frame(.)
 ```
+
+## 3: Lab Exercises
+
+### 3.1: Correlation filter & logistic regression
+
+#### Q6: Highest correlated variables with disease
+
+```{r Q6}
+library(ltm)
+
+cors <- data.frame(var = colnames(train_data)[3:ncol(train_data)],
+                   cor = NA)
+
+k <- 1
+
+for(i in 3:ncol(train_data)){
+  cors[k, "cor"] <- biserial.cor(y = train_data$disease, x = as.numeric(train_data[, i]),
+                                 use = "all.obs", level = 2)
+  k <- k + 1
+}
+
+var_names <- cors %>%
+  arrange(., desc(cor)) %>%
+  head(., n = 10) %>%
+  dplyr::select(var) %>%
+  unlist(.) 
+
+```
+
+#### Q7: Logistic regression with highest correlated variables
+
+```{r Q7}
+fit_lr <- train_data[, c("disease", var_names)] %>%
+  glm(disease ~ ., data = ., family = "binomial")
+```
+
+
+#### Q8: Evaluating performance through confusion matrix
+
+```{r}
+library(magrittr)
+ifelse(predict(fit_lr, newdata = test_data, type = "response") > .5, 1, 0) %>%
+  table(pred = ., true = test_data$disease)
+```
+
+Accuracy is: $$ \frac{18+23}{18+23+1+7} \approx .84 $$
+
+### 3.2: Regularized regression
+
+#### Q9: Preparing data
+
+```{r Q9}
+x_train <- train_data %>% dplyr::select(-disease, -sample)
+y_train <- train_data$disease
+
+x_test <- test_data %>% dplyr::select(-disease, -sample)
+y_test <- test_data$disease
+```
+
+
+#### Q10: Fitting a LASSO regression
+
+```{r Q10}
+fit_lasso <- glmnet(x = x_train, y = y_train, family = "binomial")
+
+plot(fit_lasso)
+```
+
+At the left, you see complete shrinkage on the left (i.e., large $\lambda$).
+Above the plot you see how many variables are included. The more right you go
+(when there are more and more variables included and $\lambda$ decreases) you see
+that coefficients go further from 0.
+
+#### Q11: Cross validated LASSO regression
+
+```{r}
+cv_fit_lasso <- cv.glmnet(x = as.matrix(x_train), y = y_train, family = "binomial")
+
+plot(cv_fit_lasso)
+```
+
+In this graph, you see that the error (i.e., binomial deviance) is smallest
+when the log of $\lambda$ is between -4 and -3 (which, for -4 equals
+that $\lambda = e^-4 =.018$).
+
+#### Q12: Inspecting nonzero coefficients
+
+```{r}
+coefficients <- coef(cv_fit_lasso, s = "lambda.min")
+
+which(coefficients[, 1] != 0) %>% names(.)
+
+which(coefficients[, 1] != 0) %>% names(.) %in% var_names %>% sum(.)
+```
+
+We find that there is overlap between the logistic regression model
+and the LASSO regression. In both models, 5 of the same variables were included.
+However, the LASSO regression obviously used many more other variables also.
+
+#### Q13: Predicting values and evaluating performance
+
+```{r Q13}
+
+table(pred = ifelse(predict(cv_fit_lasso, newx = as.matrix(x_test), 
+                            s = "lambda.min", type = "response") > .5, 1, 0), 
+      true = test_data$disease)
+```
+
+Here, the accuracy is: $$ \frac{18+22}{18+22+8+1} \approx 0.82 $$. Accuracy
+is slightly lower compared to the logistic regression on the test data with
+a .5 cutoff on the probability. Both models are meh.
+
+
+
+
 
