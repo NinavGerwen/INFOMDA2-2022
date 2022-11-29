@@ -1,0 +1,179 @@
+---
+title: "Assignment 1: Partial Least Squares"
+author: "Nina van Gerwen (1860852)"
+date: "2022-11-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1: Partial Least Squares
+
+### 1.1: Loading the data
+
+```{r}
+## We load the data through readRDS
+corn <- readRDS("data/corn.rds")
+```
+
+
+### 1.2: Picking a property
+
+```{r}
+## To get the desccriptives of the four properties, we use summary()
+summary(corn[, 1:4])
+```
+After looking at the descriptive statistics of the four variables, I have decided to
+chosen to predict the property of *Moisture*.
+
+### 1.3: Splitting the dataset
+
+```{r}
+## First, set a seed for reproducibility
+set.seed(1248)
+
+## Then, give corn a new variable split, which is a variable that is 
+## sampled with replacement from the two options "train" and "test" with
+## .8 and .2 probability
+corn$split <- sample(c("train", "test"), size = nrow(corn), replace = TRUE, 
+                     prob = c(.8, .2))
+
+## Finally, the training data will be the subset of corn, where they 
+## were sampled to train, and we remove the split variable
+train_data <- subset(corn, split == "train", -split)
+## And of course, the test data will be the subset of corn, where they
+## were sampled to test, and we again remove the split variable
+test_data <- subset(corn, split == "test", -split)
+```
+
+
+### 1.4: Estimating a partial least squares model
+
+```{r}
+## Load the pls package
+library(pls, warn.conflicts = FALSE)
+
+## Now we run the PLS model through the plsr function
+## We remove the other features from the formula, set scale = TRUE
+## to make sure all features are on the same scale and finally
+## we state that for validation we want leave one out
+pls_model <- plsr(Moisture ~ .-Oil-Protein-Starch, data = train_data, 
+                  scale = TRUE, validation = "LOO")
+
+```
+
+
+### 1.5: Finding the best component
+
+```{r}
+## To find the best component, we look at the Y loadings of the model
+pls_model$Yloadings
+```
+
+Inspecting the Yloadings element of the Partial Least Squares method, we can find
+the proportion of variance each component explains for the outcome variable. 
+From this, we find that
+the 26th component explains the highest Proportion of Variance (*14.05*%).
+
+
+### 1.6: Visualisation
+
+```{r}
+## Load required packages for plotting
+library(ggplot2)
+library(magrittr)
+library(tidyverse)
+
+## Create a plot, where the dataframe is the wavelengths (i.e., the colnames)
+## and the factor X loadings for the 26th component
+plot <- as.data.frame(cbind(wavelength = as.numeric(colnames(train_data[, 5:704])),
+              factor_strength = pls_model$loadings[, 26])) %>%
+  ## Then, set the correct aesthetics
+  ggplot(data = ., aes(x = wavelength, y = factor_strength,
+                       col = wavelength)) +
+  ## And ask for a line plot with minimal theme
+  geom_line() + theme_minimal()
+
+plot
+
+## To explore it further, get the same dataset as above, 
+## arrange it in descending order of factor strength and ask for the 
+## first 5 values
+as.data.frame(cbind(wavelength = as.numeric(colnames(train_data[, 5:704])),
+              factor_strength = pls_model$loadings[, 26])) %>%
+  arrange(., desc(factor_strength)) %>%
+  head(., 5)
+```
+
+From the data exploration, we find that the 5 wavelengths with
+the highest strength of loadings for the 26th components are: 1216, 1218, 2294,
+2296 and 2298. Looking at the plot, we find support for the
+notion that wavelengths between approximately 2200 and 2300 are very important.
+Furthermore, there is also a high peak near 1200. Therefore, these wavelengths are also probably the most important for predicting *Moisture* in corn. 
+
+### 1.7: Creating a more parsimonious model and obtaining predictions
+
+```{r}
+## To create a more parsimonious model, we simply copy the previous model
+## and only add a new argument which states that the number of components
+## selected should be equal to the number of components that had a standard
+## deviation higher than 1 in the first model through the selectNcomp function.
+par_model <- plsr(Moisture ~ .-Oil-Protein-Starch, data = train_data, 
+                  scale = TRUE, validation = "LOO",
+                  ncomp = selectNcomp(pls_model, method = "onesigma"))
+
+## Then, to get the predicted values, we use the predict function,
+## again stating the number of components and stating what the new data is
+pred_values_PLS <- predict(par_model, ncomp = selectNcomp(pls_model, method = "onesigma"),
+        newdata = test_data)
+
+```
+
+
+### 1.8: Comparing results of the parsimonious PLS method to LASSO regression
+
+```{r}
+## LASSO regression 
+## First load the package
+library(glmnet, warn.conflicts = FALSE)
+
+## Then, we run the lasso through the cv.glmnet function by specifying
+## our X and Y matrices
+cv_lasso_mod <- cv.glmnet(x = as.matrix(train_data[, 5:704]), 
+                          y = as.matrix(train_data$Moisture))
+
+## And we get predicted values for the test data using predict
+## with the argument "lambda.min" on s, such that we get predictions from
+## the best model
+pred_values_las <- predict(cv_lasso_mod, newx = as.matrix(test_data[, 5:704]),
+                           s = "lambda.min")
+```
+
+```{r}
+## Then, to compare the two models, we create a function that calculates MSE
+mse <- function(y_true, y_pred){
+  MSE <- sum((y_true - y_pred)^2)/length(y_true)
+  return(MSE)
+}
+
+## We also create a short 'table' through cbind that shows the predicted values
+## for both models and the true scores so that we can visually compare the models
+cbind(PLS_pred = pred_values_PLS, pred_values_las, True_Score = test_data$Moisture)
+
+## And we calculate the MSE for the predicted values from both models
+## using the earlier created mse function
+mse(test_data$Moisture, pred_values_PLS)
+
+mse(test_data$Moisture, pred_values_las)
+```
+
+Comparing the PLS regression predicted values to the LASSO regression on the
+test set, we find that the predicted values are quite similar to one another with
+only minor differences. When estimating the mean squared error (MSE), 
+we find that the LASSO regression has the smallest MSE with a value of .029 
+versus the MSE value of .033 for the PLS regression.
+
+
+
