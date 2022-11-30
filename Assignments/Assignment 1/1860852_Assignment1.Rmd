@@ -70,6 +70,8 @@ pls_model <- plsr(Moisture ~ .-Oil-Protein-Starch, data = train_data,
 ```{r}
 ## To find the best component, we look at the Y loadings of the model
 pls_model$Yloadings
+
+which.max(pls_model$Yloadings)
 ```
 
 Inspecting the Yloadings element of the Partial Least Squares method, we can find
