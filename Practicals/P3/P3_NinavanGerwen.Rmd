@@ -1,0 +1,78 @@
+---
+title: 'Practical 3: Dimension Reduction II'
+author: "Nina van Gerwen (1860852)"
+date: "2022-12-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1. Take home exercise
+
+### Preparation
+
+```{r}
+X <- read.table("data/GBMobility.txt")
+
+rownames(X) <- c('UN F','LN F','UM F','LM F','F F')
+colnames(X) <- c('UN S','LN S','UM S','LM S','F S')
+
+Z <- prop.table(X)
+sum(Z)
+
+row_prof <- prop.table(x = data.matrix(X), margin = 1)
+
+rowSums(row_prof)
+
+col_prof <- prop.table(x = data.matrix(X), margin = 2)
+
+colSums(col_prof)
+
+library(ggpubr)
+
+ggballoonplot(X, fill = "value")
+```
+
+### 1.1: Applying a correspondence analysis
+
+```{r}
+library(ca)
+
+cor_anal <- ca(X)
+```
+
+
+### 1.2: Obtaining row and column standard coordinates
+
+```{r}
+cor_anal$rowcoord
+
+cor_anal$colcoord
+```
+
+### 1.3: Proportion of total inertia explained
+
+```{r}
+summary(cor_anal)
+```
+
+According to the results, the first two dimensions together explain 94.5%
+of the total inertia.
+
+### 1.4: Obtaining a symmetric map
+
+```{r}
+plot(cor_anal)
+```
+
+### 1.5: Obtaining an asymmetric map
+
+```{r}
+plot(cor_anal, map = "rowprincipal")
+```
+
+
+
+
