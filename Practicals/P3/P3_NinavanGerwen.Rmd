@@ -74,5 +74,82 @@ plot(cor_anal, map = "rowprincipal")
 ```
 
 
+## 2: Lab exercises
+
+### 2.6: Labelling the columns and rows and showing the correspondence matrix
+
+```{r}
+Y <- read.table("data/EcoActivity.txt")
+
+rownames(Y) <- c("E1", "E2", "E3", "E4", "E5", "E6")
+colnames(Y) <- c("A1F", "A2F", "A3F", "A4F", "A1M", "A2M", "A3M", "A4M")
+
+C <- prop.table(Y)
+C
+```
+
+### 2.7: The proportion of full-time employed females with secondary level of education
+
+For this, the row has to be E3 and the column A1F. In the correspondence matrix,
+we find that the proportion for this is 0.075.
+
+### 2.8: Row and column profiles
+
+```{r}
+Y_row_prof <- prop.table(x = data.matrix(Y), margin = 1)
+Y_col_prof <- prop.table(x = data.matrix(Y), margin = 2)
+
+Y_row_prof
+Y_col_prof
+```
+
+### 2.9: Conditional proportion of AF1, given E1 and conditional proportion of A1M given E1
+
+Both given E1, which is a row. Therefore, we should look at the row profile. Then, 
+we find for A1F, the proportion is approximately .404. For A1M, it is .311.
+
+### 2.10: Conditional proportion of E6 given A4F or A4M 
+
+A4F and A4M are columns. Therefore, we look at the column profile.
+Then we find...
+
+E6 given A4F: .414.
+E6 given A4M: .426. 
+
+These values can also be calculated by looking at Y:
+$$ 3569 / 8621 = .414, $$
+where 3569 is the number of values in E6 - A4F and 8621 is the sum of the column of A4F.
+
+
+### 2.11: Applying correspondence analysis
+
+```{r}
+Y_anal <- ca(Y)
+
+summary(Y_anal)
+```
+
+From here, we find that the total inertia is approximately .245.
+
+### 2.12: Number of dimensions that explain at least 85% of inertia
+
+From the earlier summary, we find that at least two dimensions are
+necessary to explain more than 85% of the total inertia. The proportion
+of inertia explained by these two dimensions is 97.9%.
+
+### 2.13: Obtaining a symmetric map
+
+```{r}
+Y_anal_two <- ca(Y, nd = 2)
+
+plot(Y_anal_two)
+```
+
+Tadaa! A symmetric map for the correspondence analysis with only two dimensions.
+
+
+
+
+
 
 
