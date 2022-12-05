@@ -469,6 +469,8 @@ pls_model$Yloadings</code></pre>
 ## SS loadings      0.000   0.000
 ## Proportion Var   0.000   0.000
 ## Cumulative Var  80.997  80.997</code></pre>
+<pre class="r"><code>which.max(pls_model$Yloadings)</code></pre>
+<pre><code>## [1] 26</code></pre>
 <p>Inspecting the Yloadings element of the Partial Least Squares method,
 we can find the proportion of variance each component explains for the
 outcome variable. From this, we find that the 26th component explains
@@ -507,21 +509,21 @@ plot</code></pre>
 ## first 5 values
 as.data.frame(cbind(wavelength = as.numeric(colnames(train_data[, 5:704])),
               factor_strength = pls_model$loadings[, 26])) %&gt;%
-  arrange(., desc(factor_strength)) %&gt;%
+  arrange(., desc(abs(factor_strength))) %&gt;%
   head(., 5)</code></pre>
 <pre><code>##        wavelength factor_strength
 ## `2296`       2296       0.1791156
 ## `2294`       2294       0.1736814
+## `2382`       2382      -0.1727343
 ## `2298`       2298       0.1694602
-## `1216`       1216       0.1693457
-## `1218`       1218       0.1679777</code></pre>
+## `1216`       1216       0.1693457</code></pre>
 <p>From the data exploration, we find that the 5 wavelengths with the
-highest strength of loadings for the 26th components are: 1216, 1218,
-2294, 2296 and 2298. Looking at the plot, we find support for the notion
-that wavelengths between approximately 2200 and 2300 are very important.
-Furthermore, there is also a high peak near 1200. Therefore, these
-wavelengths are also probably the most important for predicting
-<em>Moisture</em> in corn.</p>
+highest absolute strength of loadings for the 26th components are: 1216,
+2294, 2296, 2298 and 2382,. Looking at the plot, we find even more
+support for the notion that wavelengths between approximately 2200 and
+2300 are very important. Furthermore, there is also a high peak near
+1200. Therefore, these wavelengths are also probably the most important
+for predicting <em>Moisture</em> in corn.</p>
 </div>
 <div id="creating-a-more-parsimonious-model-and-obtaining-predictions" class="section level3">
 <h3>1.7: Creating a more parsimonious model and obtaining

@@ -105,13 +105,13 @@ plot
 ## first 5 values
 as.data.frame(cbind(wavelength = as.numeric(colnames(train_data[, 5:704])),
               factor_strength = pls_model$loadings[, 26])) %>%
-  arrange(., desc(factor_strength)) %>%
+  arrange(., desc(abs(factor_strength))) %>%
   head(., 5)
 ```
 
 From the data exploration, we find that the 5 wavelengths with
-the highest strength of loadings for the 26th components are: 1216, 1218, 2294,
-2296 and 2298. Looking at the plot, we find support for the
+the highest absolute strength of loadings for the 26th components are: 1216,  2294,
+2296, 2298 and 2382,. Looking at the plot, we find even more support for the
 notion that wavelengths between approximately 2200 and 2300 are very important.
 Furthermore, there is also a high peak near 1200. Therefore, these wavelengths are also probably the most important for predicting *Moisture* in corn. 
 
