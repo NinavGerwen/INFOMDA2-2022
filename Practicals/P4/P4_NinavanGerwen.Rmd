@@ -1,0 +1,191 @@
+---
+title: 'Practical 4: Deep Learning'
+author: "Nina van Gerwen (1860852)"
+date: "2022-12-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 2: Take-home Exercises: a DFF NN
+
+Here we will develop a *deep feed-forward* neural network! Fun times await.
+
+### 2.1: Data preparation
+
+First, we prepare the data and load the proper packages.
+
+```{r}
+library(tidyverse)
+library(keras)
+```
+
+
+#### 2.1.1: Loading the MNIST dataset
+
+```{r}
+mnist <- dataset_mnist()
+```
+
+
+#### 2.1.2: Creating a plotting function
+
+```{r}
+plot_img <- function(img, col = gray.colors(255, start = 1, end = 0), ...) {
+  image(t(img), asp = 1, ylim = c(1.1, -0.1), col = col, bty = "n", axes = FALSE, ...)
+}
+```
+
+Code was taken from the practical. 
+
+#### 2.1.3: Ensuring brightness values of the images are in the range (0, 1)
+
+```{r}
+range(mnist$train$x)
+mnist$train$x <- mnist$train$x / 255
+range(mnist$train$x)
+mnist$test$x <- mnist$test$x / 255
+```
+
+To ensure this, we look at the range of the brightness values, we find that
+they range from 0 to 255. Therefore, to keep it between 0 and 1, we simply divide
+all brightness values by 255. Then we find that the range of brightness values
+is between 0 and 1. 
+
+### 2.2: Multinomial logistic regression
+
+```{r}
+set.seed(1248)
+
+multinom  <- 
+  keras_model_sequential(input_shape = c(28, 28)) %>% # initialize a sequential model
+  layer_flatten() %>% # flatten 28*28 matrix into single vector
+  layer_dense(10, activation = "softmax") # softmax outcome == logistic regression for each of 10 outputs
+
+multinom$compile(
+  loss = "sparse_categorical_crossentropy", # loss function for multinomial outcome
+  optimizer = "adam", # we use this optimizer because it works well
+  metrics = list("accuracy") # we want to know training accuracy in the end
+)
+
+summary(multinom)
+```
+
+#### 2.2.4: Explaining the number of parameters
+
+The images have 28 x 28 pixels. This means that they have 28 x 28 dimensions.
+This leads to a total of 784 parameters/weights per outcome variable for only the features. Then we also have to add another one for the intercept/bias per outcome variable, leading to 785. Finally, considering that there are 10 outcome variables, and all pixels can load on every outcome variable with their own intercept, it means that there are 785 x 10 = 7850 parameters in total!
+
+#### 2.2.5: Accuracy for a multinomial logistic regression model that was trained for 5 epochs
+
+```{r}
+multinom %>% fit(x = mnist$train$x, y = mnist$train$y, epochs = 5, validation_split = 0.2, verbose = 1)
+```
+
+From the results, we find that after training for 5 epochs, the multinomial
+logistic regression has a validation accuracy of approximately 0.925.
+
+#### 2.2.6: Accuracy for the multinomial logistic regression after another 5 epochs
+
+```{r}
+multinom %>% fit(x = mnist$train$x, y = mnist$train$y, epochs = 5, validation_split = 0.2, verbose = 1)
+```
+
+After training the model for another 5 epochs, the validation accuracy has
+risen to 0.929. We are probably simply overfitting the model, however.
+
+### 2.3: Deep Feed-Forward Neural Network
+
+#### 2.3.7: Creating our own DFF NN with 50890 parameters and training it for 10 epochs
+
+```{r}
+dff_nn <- 
+  ## first, we tell the model what shape the input is
+  keras_model_sequential(input_shape = c(28, 28)) %>% 
+  ## we tell it to flatten the input to a vector
+  layer_flatten() %>%
+  ## we tell it we want a dense layer with 64 hidden units and relu activation function
+  layer_dense(64, activation = "relu") %>%
+  ## then we want an outcome layer (also dense) with the number of units
+  ## equal to the number of dummy categories and softmax activation function
+  layer_dense(10, activation = "softmax")
+
+## Then we change the compiling to:
+dff_nn$compile(
+  loss = "sparse_categorical_crossentropy", # the same loss function as before
+  optimizer = "adam", # we use this optimizer because it works well
+  metrics = list("accuracy") # we want to know training accuracy in the end
+)
+
+## And finally, we train the model for 10 epochs
+dff_nn %>% fit(x = mnist$train$x, y = mnist$train$y, epochs = 10, validation_split = 0.2, verbose = 1)
+```
+
+After 10 epochs, the DFF NN model has a validation accuracy of approximately 0.972.
+
+#### 2.2.8: Creating predictions for the test data using the two models and comparing performance
+
+```{r}
+class_predict <- function(model, x_train) predict(model, x = x_train) %>% apply(1, which.max) - 1
+
+multinom_pred <- class_predict(multinom, x_train = mnist$test$x)
+
+dff_nn_pred <- class_predict(dff_nn, x_train = mnist$test$x)
+
+## For multinomial logistic regression:
+table(true = mnist$test$y, pred = multinom_pred)
+
+## For DFF NN
+table(true = mnist$test$y, pred = dff_nn_pred)
+```
+
+
+In the multinomial logistic regression, we find more wrongly categorised numbers
+(as you would expect). In both cases, the number 4 is very often predicted as a 9. However, less
+in the deep feed-forward neural network. In multinomial, a 5 is olso often categorised
+as either a 2 or 8. This happens less in the deep feed-forward neural network.
+
+#### 2.2.9: Another deep feed-forward neural network
+
+```{r}
+dff_nn_2 <- 
+  keras_model_sequential(input_shape = c(28, 28)) %>% 
+  layer_flatten() %>%
+  ## the only extra layer we add is another dense layer with 128 hidden units
+  layer_dense(128, activation = "relu") %>%
+  layer_dense(64, activation = "relu") %>%
+  layer_dense(10, activation = "softmax")
+
+dff_nn_2$compile(
+  loss = "sparse_categorical_crossentropy",
+  optimizer = "adam",
+  metrics = list("accuracy") 
+)
+
+## And finally, we train the model for 10 epochs
+dff_nn_2 %>% fit(x = mnist$train$x, y = mnist$train$y, epochs = 10, validation_split = 0.2, verbose = 1)
+
+dff_nn_2_pred <- class_predict(dff_nn_2, x_train = mnist$test$x)
+
+table(true = mnist$test$y, pred = dff_nn_2_pred)
+```
+
+The validation accuracy for this second DFF NN is 0.972, similar to the other
+DFF NN. However, the confusion matrix does show some differences. Largest difference
+is the amount of missclassifications for the number 5, which is often
+classified as a 3. This did not happen as often in the other models. Furthermore,
+this model has a lot more parameters. For parsimonity, I would choose the other
+DFF NN.
+
+### 3: Lab Exercises
+
+### 3.1: Convolutional Neural Network
+
+#### 3.1.10: 
+
+
+
+
+
