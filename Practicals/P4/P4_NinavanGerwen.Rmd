@@ -30,12 +30,14 @@ mnist <- dataset_mnist()
 ```
 
 
-#### 2.1.2: Creating a plotting function
+#### 2.1.2: Creating a plotting function and creating an image
 
 ```{r}
 plot_img <- function(img, col = gray.colors(255, start = 1, end = 0), ...) {
   image(t(img), asp = 1, ylim = c(1.1, -0.1), col = col, bty = "n", axes = FALSE, ...)
 }
+
+plot_img(mnist$train$x[1,,])
 ```
 
 Code was taken from the practical. 
@@ -183,7 +185,90 @@ DFF NN.
 
 ### 3.1: Convolutional Neural Network
 
-#### 3.1.10: 
+#### 3.1.10: Adding a channel dimension to the variables/features
+
+```{r}
+# add channel dimension to input (required for convolution layers)
+dim(mnist$train$x) <- c(dim(mnist$train$x), 1)
+dim(mnist$test$x)  <- c(dim(mnist$test$x), 1)
+
+plot_img(mnist$train$x[314,,,])
+```
+
+#### 3.1.11: Creating a *Convolutional* Neural Network
+
+```{r}
+cnn <- 
+  ## state what dimensions the input has: in our case, 28 x 28 pixels
+  ## in greyscale, therefore 1
+  keras_model_sequential(input_shape = c(28, 28, 1)) %>% 
+  ## Add a convolutional layer that divides the dataset into 6 filters
+  ## and kernel size of a 5 by 5 matrix
+  layer_conv_2d(filters = 6, kernel_size = c(5, 5)) %>% 
+  ## This is followed by a pooling layer, which gets the max variance value
+  ## for every separate 4 by 4 matrix in order to reduce the dimensionality
+  layer_max_pooling_2d(pool_size = c(4, 4)) %>%
+  ## Then, we flatten the pooled matrix into a single vector
+  layer_flatten() %>% 
+  ## We add a dense NN layer with 32 units with relu as activation function
+  layer_dense(units = 32, activation = "relu") %>% 
+  ## and finally we define the output layer with softmax activation
+  ## as we are working with categorical data
+  layer_dense(10, activation = "softmax")
+
+## And just like the previous models, we use the same compile arguments
+cnn %>% 
+  compile(
+    loss = "sparse_categorical_crossentropy",
+    optimizer = "adam", 
+    metrics = c("accuracy")
+  )
+```
+
+
+#### 3.1.12: Running the CNN for 10 epochs on the training data and looking at its performance
+
+```{r}
+cnn %>% fit(x = mnist$train$x, y = mnist$train$y, epochs = 10, 
+            validation_split = 0.2, verbose = 1)
+```
+
+We find that the model has an accuracy of .984 on the training set, and 
+a validation accuracy of .979. This is somewhat higher (probably not significantly)
+than the previous models... So now let's try to improve it!
+
+#### 3.1.13: Creating our own CNN with improved validation accuracy
+
+```{r}
+set.seed(1248)
+improv_cnn <- 
+  keras_model_sequential(input_shape = c(28, 28, 1)) %>% 
+  layer_conv_2d(filters = 4, kernel_size = c(3, 3)) %>% 
+  layer_max_pooling_2d(pool_size = c(2, 2)) %>%
+  layer_conv_2d(filters = 8, kernel_size = c(3, 3)) %>%
+  layer_max_pooling_2d(pool_size = c(2, 2)) %>%
+  layer_flatten() %>% 
+  layer_dropout(rate = .1) %>%
+  layer_dense(units = 64, activation = "relu") %>% 
+  layer_dropout(rate = .5) %>%
+  layer_dense(10, activation = "softmax")
+  
+improv_cnn %>% 
+  compile(
+    loss = "sparse_categorical_crossentropy",
+    optimizer = "adam", 
+    metrics = c("accuracy")
+  )
+
+improv_cnn %>% fit(x = mnist$train$x, y = mnist$train$y, epochs = 10, 
+            validation_split = 0.2, verbose = 1)
+```
+
+This model with an extra layer of convolving and pooling and two
+drop out layers both before and after the flatten layer has a validation accuracy
+of .982, which is higher! I'm calling it a day.
+
+
 
 
 
