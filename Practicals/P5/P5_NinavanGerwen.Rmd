@@ -1,0 +1,176 @@
+---
+title: "Practical 5: Clustering"
+author: "Nina van Gerwen (1860852)"
+date: "2022-12-15"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1: Introduction
+
+```{r}
+library(MASS)
+library(tidyverse)
+library(patchwork)
+library(ggdendro)
+```
+
+### 1.1: Commenting data simulation code
+
+```{r}
+## To simulate data, we do the following
+
+## First, set a seed for reproducibility
+set.seed(123)
+
+## Create a 2 by 2 variance-covariance matrix 
+sigma      <- matrix(c(1, .5, .5, 1), 2, 2)
+
+## Create a matrix with data that is simulated from a 
+## multivariate normal distribution that has:
+
+  ## 2 variables, both with a mean of 5 and variance-covariance stated in sigma
+  ## 100 observations
+sim_matrix <- mvrnorm(n = 100, mu = c(5, 5), 
+                      Sigma = sigma)
+
+## Name the columns from the simulated matrix x1 and x2
+colnames(sim_matrix) <- c("x1", "x2")
+
+## Create a tibble of the simulated matrix that has another
+## variable which denotes one of three classes (A, B, C)
+## which are randomly sampled with equal probabilities for every observation
+sim_df <- 
+  sim_matrix %>% 
+  as_tibble() %>%
+  mutate(class = sample(c("A", "B", "C"), size = 100, 
+                        replace = TRUE))
+
+## Create another tibble from the earlier created tibble that
+## changes the variables in the following way:
+sim_df_small <- 
+  sim_df %>%
+                        ## if class is A, x2 becomes x2 + .5
+  mutate(x2 = case_when(class == "A" ~ x2 + .5,
+                        ## if class is B, x2 becomes x2 - .5
+                        class == "B" ~ x2 - .5,
+                        ## and so on
+                        class == "C" ~ x2 + .5),
+         ## do similar changes for x1
+         x1 = case_when(class == "A" ~ x1 - .5,
+                        class == "B" ~ x1 - 0,
+                        class == "C" ~ x1 + .5))
+
+## Repeat the process from the previous created tibble, but now increase
+## the values by which x2 and x1 change depending on class
+sim_df_large <- 
+  sim_df %>%
+  mutate(x2 = case_when(class == "A" ~ x2 + 2.5,
+                        class == "B" ~ x2 - 2.5,
+                        class == "C" ~ x2 + 2.5),
+         x1 = case_when(class == "A" ~ x1 - 2.5,
+                        class == "B" ~ x1 - 0,
+                        class == "C" ~ x1 + 2.5))
+```
+
+### 1.2: Creating two unsupervised datasets
+
+To do this, we simply remove the class features.
+
+```{r}
+sim_df_small <- sim_df_small %>% select(-class)
+
+sim_df_large <- sim_df_large %>% select(-class)
+```
+
+### 1.3: Creating scatterplots
+
+```{r}
+plot_one <- sim_df_small %>% ggplot(., aes(x = x1, y = x2)) +
+  geom_point() + theme_minimal() + labs(title = "Small dataset")
+plot_two <- sim_df_large %>% ggplot(., aes(x = x1, y = x2)) +
+  geom_point() + theme_minimal() + labs(title = "Large dataset")
+
+plot_one + plot_two + plot_layout(ncol = 2, nrow = 1) 
+```
+
+Looking at the plots, we find that the clusters in the sim_df_large dataset
+are more defined. This is because the differences we defined through
+case_when() were bigger there compared to the sim_df_small dataset.
+
+## 2: Hierarchical clustering
+
+### 2.4: Running a hierarchical clustering on both datasets and plotting the dendograms
+
+```{r}
+distance_small <- dist(sim_df_small, method = "euclidean")
+results_small <- hclust(distance_small, method = "complete")
+
+distance_large <- dist(sim_df_large, method = "euclidean")
+results_large <- hclust(distance_large, method = "complete")
+
+small_dendo <- ggdendrogram(results_small) + ylim(0, 10) +
+  labs(title = "Small dataset")
+
+large_dendo <- ggdendrogram(results_large) + ylim(0, 10) +
+  labs(title = "Large dataset")
+
+small_dendo + large_dendo + plot_layout(ncol = 2)
+```
+
+Looking at the difference between the dendrograms, we find that mostly the
+scale is different. The large dataset has higher values on the y-axis. The
+y-axis represents how similar observations are in euclidean distance. Therefore,
+this result is to be expected as the differences between the clusters are also larger in
+the 'large' dataset. 
+
+### 2.5: Running a manhatten distance hierarchical clustering on small dataset
+
+```{r}
+manhatten_distances <- dist(sim_df_small, method = "manhattan")
+results_manhat <- hclust(manhatten_distances, method = "complete")
+
+ggdendrogram(results_manhat)
+```
+
+### 2.6: Obtaining cluster assignments for the three hierarchical clusters
+
+```{r}
+sim_df_small <- sim_df_small %>%
+  mutate(Euc_Clust = as.factor(cutree(results_small, k = 3)),
+         Man_Clust = as.factor(cutree(results_manhat, k = 3)))
+
+sim_df_large <- sim_df_large %>%
+  mutate(Euc_Clust = as.factor(cutree(results_large, k = 3)))
+
+clust_1 <- ggplot(sim_df_small, aes(x = x1, y = x2, col = Euc_Clust)) +
+  geom_point() + theme_minimal() + labs(title = "Euclidean dist - Small dataset")
+
+clust_2 <- ggplot(sim_df_small, aes(x = x1, y = x2, col = Man_Clust)) +
+  geom_point() + theme_minimal() + labs(title = "Manhatten dist - Small dataset")
+
+clust_3 <- ggplot(sim_df_large, aes(x = x1, y = x2, col = Euc_Clust)) +
+  geom_point() + theme_minimal() + labs(title = "Euclidean dist - Large dataset")
+
+clust_1 + clust_2 + clust_3 + plot_layout(ncol = 2, nrow = 2)
+```
+
+Looking at the three scatterplots (I was feeling enthousiastic so I am 
+comparing all three), we find that all hierarchical clustering methods
+worked quite well. I would argue that on the large dataset, two values are
+wrongly classified (the ones that are green near the blue). Besides that,
+performance seems similar.
+
+## 3: K-means clustering
+
+### 3.7: Creating K-means clustering with differing amount of K
+
+```{r}
+kmeans(sim_)
+```
+
+
+
