@@ -169,8 +169,264 @@ performance seems similar.
 ### 3.7: Creating K-means clustering with differing amount of K
 
 ```{r}
-kmeans(sim_)
+k_2 <- kmeans(sim_df_large, centers = 2)
+
+k_3 <- kmeans(sim_df_large, centers = 3)
+
+k_4 <- kmeans(sim_df_large, centers = 4)
+
+k_6 <- kmeans(sim_df_large, centers = 6)
+
+plot1 <- sim_df_large %>%
+  cbind(., k_2 = as.factor(k_2$cluster)) %>%
+  ggplot(., aes(x = x1, y = x2, col = k_2)) +
+  geom_point() + theme_minimal() + labs(title = "K = 2")
+
+plot2 <- sim_df_large %>%
+  cbind(., k_3 = as.factor(k_3$cluster)) %>%
+  ggplot(., aes(x = x1, y = x2, col = k_3)) +
+  geom_point() + theme_minimal() + labs(title = "K = 3")
+
+plot3 <- sim_df_large %>%
+  cbind(., k_4 = as.factor(k_4$cluster)) %>%
+  ggplot(., aes(x = x1, y = x2, col = k_4)) +
+  geom_point() + theme_minimal() + labs(title = "K = 4")
+
+plot4 <- sim_df_large %>%
+  cbind(., k_6 = as.factor(k_6$cluster)) %>%
+  ggplot(., aes(x = x1, y = x2, col = k_6)) +
+  geom_point() + theme_minimal() + labs(title = "K = 6")
+
+plot1 + plot2 + plot3 + plot4 + plot_layout(ncol = 2, nrow = 2)
 ```
+
+### 3.8: Repeating the k-means clustering
+
+I did not do it again, but I can theorize that the results will be different. 
+This is because k-means clustering is a random process due to the fact
+that it assigns all observations to *k* random groups in the beginning.
+
+### 3.9: Performing bootstrap stability assessment for k = 3 and k = 6
+
+```{r}
+library(bootcluster)
+
+k.select(sim_df_large[, 1:2], range = c(3, 6), B = 100, r = 10)
+```
+
+Performing k-means clustering whilst also estimating bootstrapping stability, 
+we find that on the 'large' dataset, *k = 3 *has the highest stability
+with .972, whereas *k = 6* has a stability of .392. It seems that k-means
+clustering works pretty well on the dataset, as there initially were 
+3 clusters!
+
+## 4: Challenge question
+
+### 4.10: Creating a function to perform k-medians clustering
+
+```{r}
+kmedians <- function(dataset, k){
+  ## Require tidyverse for the function to work
+  require(tidyverse)
+  
+  ## Save the number of rows and columns in the dataset
+  n <- nrow(dataset)
+  c <- ncol(dataset)
+  
+  ## Then, we randomly assign the examples to K clusters
+  dataset$cluster <- sample(1:k, size = n, replace = TRUE)
+  
+  ## Now, we will start a while loop, but first we do a few things
+    ## we set a new variable 'change' to TRUE
+  change <- TRUE
+    ## we copy the dataset twice into temp_data and second_data
+  temp_data <- dataset
+  second_data <- dataset
+    ## we keep a count of the number of iterations
+  num <- 0
+  
+  ## Then, a while statement that runs as long as 'change' == TRUE
+  while(change == TRUE){
+    
+    ## First, calculate the centroid for every feature per k and save these
+    medians <- temp_data %>% 
+      group_by(cluster) %>% 
+      summarize_all(median)
+    
+    ## Then, with these centroid values:
+    distances <- medians[, 2:(c+1)] %>% 
+      ## Rowbind them to the temp_data set and remove the cluster variable
+      rbind(., select(temp_data, -cluster)) %>%
+      ## Calculate the euclidean distances of this new data frame
+      dist(., method = "euclidean") %>% 
+      ## Turn it into a matrix
+      as.matrix(.) %>% 
+      ## And subset the distances for every observation from the initial
+      ## dataset to the earlier calculated centroids
+      .[(k+1):(n+k), 1:k]
+    
+    ## And create an empty vector of future column numbers for every observation 
+    col_num <- rep(NA, n)
+    
+    ## Then start a for loop for 1 to all n observations in which:
+    for(i in 1:n){
+    
+      ## We first get the ith row of the distance matrix
+    temp_dist <- distances[i ,]
+      ## We obtain the minimum value of this vector
+    min_value <- min(temp_dist)
+          ## Now, however, we need to know which column this minimum
+          ## value is in, and for this we use a for loop for j to the number of
+          ## clusters
+        for(j in 1:k){
+          
+          ## We make a temporary value that is the jth element of the 
+          ## ith row of the distance matrix
+          temp_value <- temp_dist[j]
+            ## And then we check if the temporary value is the minimum value
+          if(temp_value == min_value){
+            ## If this is the case, the ith col number will be the part of the
+            ## jth cluster
+            col_num[i] <- j
+            ## Else, keep running the for-loop till u find the proper value
+          }
+        }
+    
+    }
+    
+    ## After these two for loops, we now have a vector that tells us
+    ## for every observation, which cluster centroid is closest
+    ## and we set the temp_data cluster variable this vector
+    temp_data$cluster <- col_num
+    
+    ## Then, we check through an all statement if the temporary data
+    ## and the second_data are equal
+    change <- ifelse(all(temp_data$cluster == second_data$cluster), FALSE, TRUE)
+      ## If they are, it means that none of the assigments changed
+      ## and therefore change will change to FALSE and the while loop will stop
+    ## If they are not, change stays TRUE and the while loop continues...
+    
+    ## Where first, we update the second data to the temporary data
+    second_data <- temp_data
+    
+    ## And add a 1 to the iteration count
+    num <- num + 1
+    
+  }
+  
+  ## The final output should be the cluster vector after the cluster
+  ## assignments have not changed
+  output <- temp_data$cluster
+  
+  ## We also state that we want the algorithm to print the number of iterations
+  print(paste("The algorithm ran", num, "iterations."), quote = FALSE)
+  
+  ## Return the final output
+  return(output)
+}
+
+## To test: we set a seed, and use the kmedians function on the sim_df_large set
+set.seed(1248)
+clusts <- kmedians(sim_df_large[, 1:2], k = 3)
+
+## And we plot it
+cbind(sim_df_large, clust = as.factor(clusts)) %>%
+  ggplot(., aes(x = x1, y = x2, col = clust)) + geom_point() +
+  theme_minimal() + labs(title = "Median clustering, k = 3")
+```
+
+Eureka! It works. Only when *k* becomes very large, the algorithm starts to fail.
+Unsure as to why. Luckily, we will now fix that by making it smart!
+
+### 4.11: Updating the function to be smart
+
+```{r}
+smart_kmedians <- function(dataset, k, smart_init = FALSE){
+  require(tidyverse)
+  
+  n <- nrow(dataset)
+  c <- ncol(dataset)
+  
+  ## Everything in this function is the same except for a new argument
+  ## and the following if() statement that states that:
+      ## if smart_init argument equals TRUE:
+  if(smart_init == TRUE){
+      ## The initial clusters should be based on hierarchical clustering with
+      ## k clusters
+  dataset$cluster <- dist(dataset, method = "euclidean") %>%
+    hclust(.,  method = "complete") %>%
+    cutree(., k = k)
+  } else {
+    ## Else, all stays the same as before
+  dataset$cluster <- sample(1:k, size = n, replace = TRUE)
+  }
+  
+  change <- TRUE
+  temp_data <- dataset
+  second_data <- dataset
+  
+  num <- 0
+  
+  while(change == TRUE){
+    
+    medians <- temp_data %>% 
+      group_by(cluster) %>% 
+      summarize_all(median)
+    
+    distances <- medians[, 2:(c+1)] %>% 
+      rbind(., select(temp_data, -cluster)) %>%
+      dist(., method = "euclidean") %>% 
+      as.matrix(.) %>% 
+      .[(k+1):(n+k), 1:k]
+    
+    col_num <- rep(NA, n)
+    
+    for(i in 1:n){
+    
+    temp_dist <- distances[i ,]
+      
+    min_value <- min(temp_dist)
+    
+        for(j in 1:k){
+          
+          temp_value <- temp_dist[j]
+          
+          if(temp_value == min_value){
+            col_num[i] <- j
+          }
+        }
+    
+    }
+    
+    temp_data$cluster <- col_num
+    
+    change <- ifelse(all(temp_data$cluster == second_data$cluster), FALSE, TRUE)
+    
+    second_data <- temp_data
+    
+    num <- num + 1
+  }
+  
+  output <- temp_data$cluster
+  
+  print(paste("The algorithm ran", num, "iterations."), quote = FALSE)
+  
+  return(output)
+}
+
+set.seed(1248)
+
+kmedians(sim_df_large[, 1:2], k = 3)
+smart_kmedians(sim_df_large[, 1:2], k = 3, smart_init = TRUE)
+
+```
+
+Now, as long as smart_init is true, the function also works for large *k*'s and
+it will overall run fewer iterations of the while loop.
+
+
+
+
 
 
 
