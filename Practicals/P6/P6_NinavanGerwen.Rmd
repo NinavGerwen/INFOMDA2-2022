@@ -1,0 +1,166 @@
+---
+title: "Practical 6: Model-based Clustering"
+author: "Nina van Gerwen (1860852)"
+date: "2022-12-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1: Introduction
+
+First, we load the packages and data.
+
+```{r}
+library(mclust)
+library(tidyverse)
+library(patchwork)
+
+df <- as_tibble(banknote)
+```
+
+## 2: Take home exercises
+
+### 2.1: Data exploration
+
+#### 2.1.1: Describing the dataset
+
+The dataset contains six measurements made on 100 genuine and 100 counterfeit
+old-Swiss 1000-frank notes. So the clusters are *genuine* and *counterfeit*, and
+then all the features are information about the bill (e.g., length).
+
+#### 2.1.2: Visualising the data
+
+```{r}
+df %>%
+  ggplot(., aes(x = Left, y = Right, col = Status)) +
+  geom_point() + theme_minimal() + geom_jitter(aes(col = Status))
+```
+
+Looking at the plot, I would say that there is some difference between the clusters
+on the features Left and Right. however, there is still quite some overlap also.
+
+#### 2.1.3: Removing the categorical variable
+
+```{r}
+df <- select(df, -Status)
+```
+
+
+#### 2.1.4: Creating a density plot for every variable/feature
+
+```{r}
+df %>%
+  keep(is.numeric) %>%
+  gather() %>%
+  ggplot(aes(value)) +
+  facet_wrap(~ key, scales = "free") + 
+  geom_density() +
+  theme_minimal()
+```
+
+From the above six plots, we find that especially the feature Diagonal might be
+best for clustering.
+
+### 2.2: Univariate model-based clustering
+
+#### 2.2.5: Using mclust to perform model-based clustering
+
+```{r}
+set.seed(1248)
+fit_E_2 <- Mclust(data = df$Diagonal, G = 2, modelNames = "E")
+
+fit_E_2$parameters
+```
+
+Above, we find that the means of the clusters are 139.4 and 141.5. And 
+their variances are .244.
+
+#### 2.2.6: Computing the BIC
+
+Using the formula:
+
+$$ \text{BIC} = -2 l(\theta) + k \cdot log(n)$$ 
+
+We can calculate that the BIC is:
+
+```{r}
+-2 * fit_E_2$loglik + 3 * log(200)
+```
+The BIC value that the Mclust function computed was -569.47. This means
+that there is a slight difference (besides the fact that it is negative).
+The 3 parameters I used were: 2 means and one variance. 
+
+#### 2.2.7: Plotting the implied density
+
+```{r}
+plot(fit_E_2, what = "density") + rug(df$Diagonal, col = "red")
+```
+
+#### 2.2.8: Clustering again with unequal variances
+
+```{r}
+set.seed(1248)
+fit_V_2 <- Mclust(data = df$Diagonal, G = 2, modelNames = "V")
+
+fit_V_2$parameters
+```
+
+Now we have two means of 139.5 and 141.6 and two variances that are .359 and .150.
+
+```{r}
+plot(fit_V_2, what = "density") + rug(df$Diagonal, col = "red")
+```
+
+Plotting this unequal variances model, we see that indeed one of the peaks in
+the bimodal distribution is more spreadout with a lower peak.
+
+#### 2.2.9: The new model's parameters
+
+This unequal variance model now has 4 parameters: 2 means and 2 variances.
+
+#### 2.2.10: Calculating the deviances
+
+```{r}
+-2 * fit_E_2$loglik
+
+-2 * fit_V_2$loglik
+```
+
+According to the deviance, the unequal variance model is better. 
+
+#### 2.2.11: Calculating the BICs
+
+```{r}
+-2 * fit_E_2$loglik + 3 * log(200)
+
+-2 * fit_V_2$loglik + 4 * log(200)
+```
+According to the BIC, the unequal variance model is still better. In other words,
+letting the cluster have a varying variance might be worth it (as it only costs
+one extra parameter).
+
+## 3: Lab Exercises
+
+### 3.1: Multivariate model-based clustering
+
+#### 3.1.12: Using Mclust with all features
+
+```{r}
+set.seed(1248)
+fit_MV <- Mclust(data = df, G = 1:9)
+
+fit_MV$BIC
+
+plot(fit_MV, what = "BIC")
+```
+
+
+
+
+
+  
+
+
