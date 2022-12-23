@@ -156,6 +156,66 @@ fit_MV$BIC
 
 plot(fit_MV, what = "BIC")
 ```
+According to the results, the model with the most optimal BIC is a VVE model with
+3 clusters with a BIC of -1607.57. This means the model allows for varying
+volumes and shapes for each cluster, but an equal orientation.
+
+#### 3.1.13: The number of mean parameters of the VVE-3 model
+
+The model has 3 clusters and 6 features are nicluded. This means that
+there are 3 x 6 mean parameters in this model.
+
+#### 3.1.14: Running a 2-component VVV model and visualising
+
+```{r}
+set.seed(1248)
+fit_MV_2 <- Mclust(data = df, G = 2, modelNames = "VVV")
+
+plot(fit_MV_2, what = "density")
+```
+
+Looking at the matrix of bivariate density plots, we find that the features that give
+a good component separation are: *Diagonal*, *Top* and *Bottom*. The features
+that seem to not provide a good component separation are: *Length*, *Left* and
+*Right*.
+
+#### 3.1.15: Plotting the estimated class assignments to size aesthetics
+
+```{r}
+df %>%
+  mutate(Est_Class = as.factor(fit_MV_2$classification),
+         Uncertainty = abs(fit_MV_2$uncertainty)) %>%
+  ggplot(data = ., aes(x = Left, y = Right, col = Est_Class)) +
+  geom_point(aes(size = Uncertainty)) + geom_jitter(aes(col = Est_Class)) + theme_minimal()
+```
+
+The uncertainty seems to be largest around the overlapping area, which is
+to be expected. However, the scale of uncertainty is a bit weird so I would
+not draw any coclusions from it.
+
+### 3.2: Challenge assignment
+
+#### 3.2.16: Loading the HDclassif package
+
+```{r}
+library(HDclassif)
+```
+
+#### 3.2.17: Running a high-dimensional data clustering
+
+An axis is created for every cluster, first they start out around a similar location
+(which is decided upon by random initialisation). After which they branch out to
+separate locations in multiple iterations. After each time that the axes moves,
+new cluster predictions are also made to further improve the axis locations.
+In the end, you end up with cluster allocations according to the 4 most 
+'separated' axis.
+
+
+
+
+
+
+
 
 
 
