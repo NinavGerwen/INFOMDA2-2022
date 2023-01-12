@@ -1,0 +1,126 @@
+---
+title: 'Practical 7: Time Series'
+author: "Nina van Gerwen (1860852)"
+date: "2023-01-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1: Introduction
+
+```{r}
+library(expsmooth)
+library(fpp3)
+library(fable.prophet)
+```
+
+
+## 2: Take-home exercises
+
+### 2.1: Data exploration
+
+#### 2.1.1: Describing the structure of the data
+
+```{r}
+data(ukcars)
+ukcars %>% str()
+```
+The ukcars dataset is a time-series dataset from 1977 to 2005 with 113 values.
+This means the data is probably seasonal/quarterly.
+
+#### 2.1.2: Converting to tsibble
+
+```{r}
+ts_cars <- ukcars %>% as_tsibble(.)
+```
+
+ts_cars has a different structure. It is no longer a time-series. Instead, it is
+a time-series tibble (i.e., a tibble with an index variable that denotes the time
+of the observations).
+
+### 2.1.3: Some line plot visualisation
+
+```{r}
+ts_cars %>% autoplot(value)
+```
+
+There seems to be a large seasonal effect and a somewhat increasing trend past
+1980. 
+
+#### 2.1.4: Further line plot visualisations
+
+```{r}
+ts_cars %>% filter(year(index) > 1980 & year(index) < 2000) %>%
+  autoplot(value)
+```
+
+When looking only at the period between 1980 and 2000, the increasing trend
+becomes even more obvious with the same seasonal effect as before.
+
+### 2.1.5: Plotting the autocorrelation
+
+```{r}
+ts_cars %>% ACF(value) %>% autoplot(.)
+```
+
+Specific features to notice about this plot is the returning pattern every
+4 lags. Furthermore, autocorrelation for every lag is significant.
+
+## 3: Lab exercises
+
+### 3.1: Decomposition
+
+#### 3.1.6: Creating an STL decomposition
+
+```{r}
+set.seed(1248)
+STL_decomp <- ts_cars %>% 
+  model(STL(value ~ trend(window = 15) + season(window = Inf))) %>% 
+  components() 
+
+STL_decomp %>%
+  head()
+
+```
+
+
+#### 3.1.7: Plotting the individual components
+
+```{r}
+STL_decomp %>% autoplot()
+```
+
+#### 3.1.8: Plotting the autocorrelation of the remainder
+
+```{r}
+STL_decomp %>% 
+  select(remainder) %>% 
+  ACF(remainder) %>% 
+  autoplot(.)
+```
+
+According to the Box-Jenkins methodology, this could be slightly improved, yes.
+Currently, 9 out of the 20 lags are still a significant correlation, which means
+that the residuals are not yet completely 'white noise'.
+
+### 3.2: ARIMA modeling 
+
+#### 3.2.9: Creating two ARIMA models
+
+```{r}
+models <- 
+  ts_cars %>%
+  model(
+    ARIMA = ARIMA(value ~ pdq(1, 1, 1) + PDQ(0, 0, 0)),
+    SARIMA = ARIMA(value)
+  )
+```
+
+
+
+
+
+
