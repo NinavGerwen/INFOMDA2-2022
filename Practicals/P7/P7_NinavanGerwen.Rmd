@@ -119,6 +119,63 @@ models <-
   )
 ```
 
+The first ARIMA model is an Autoregressive Integrated Moving Average model, with
+three parts: First, an autoregressive model with lag 1, this means that
+value $y_t$ is autoregressed on only the first value before it (i.e., $y_{t-1}$). 
+Second, we don't work with the actual values but the difference between the values (in order
+to achieve stationarity). And third, the model also includes a Moving Average part. This means 
+that value $y_t$ is also predicted by the the first error before the value 
+(i.e., $y_t$ is dependent on $\epsilon_{t-1}$). Furthermore, there is *NO* seasonality
+in this model (defined by the PDQ(0, 0, 0) part).
+
+The second model, instead, is an automatic ARIMA specification, where it has
+simply chosen the best model (i.e., lowest AIC) after testing multiple models.
+The outcome for this model was a model with pdq(1,0,1) + PDQ(1,1,2).
+
+#### 3.2.10: Creating forecasts
+
+```{r}
+models %>% 
+  select(ARIMA) %>% 
+  forecast(., h = "5 years") %>%
+  autoplot(.)
+
+models %>%
+  select(SARIMA) %>%
+  forecast(., h = "5 years") %>%
+  autoplot(.)
+```
+
+The main difference is obviously the seasonsality, which the SARIMA model
+accounts for, whereas the ARIMA model does not. Furthermore, the SARIMA
+model seems to have smaller intervals (which is to be expected as it was the
+model with the lowest AIC). However, this might be due to overfitting.
+
+An obvious similarity between both plots is that for both plots, the variance
+of the point forecasts increases with time, as it should.
+
+### 3.3: Comparing SARIMA and Prophet forecasting methods
+
+#### 3.3.11. Fitting a data-driven ARIMA and a prophet model
+
+```{r}
+ARIMA_FC <- ts_cars %>% 
+  filter(year(index) > 1980 & year(index) < 1995) %>%
+  model(ARIMA(value)) %>%
+  forecast(., h = "5 years")
+
+PROPH_FC <- ts_cars %>% 
+  filter(year(index) > 1980 & year(index) < 1995) %>%
+  model(prophet(value)) %>%
+  forecast(., h = "5 years")
+
+MSE(.resid = ARIMA_FC$.mean, .actual = filter(ts_cars, year(index) > 1995 & year(index) < 2000))
+
+
+MSE(.resid = PROPH_FC$.mean, .actual = filter(ts_cars, year(index) > 1995 & year(index) < 2000))
+```
+
+According to the mean squared error, the prophet model has better predictions.
 
 
 
