@@ -1,0 +1,231 @@
+---
+title: "Assignment 2: Comparing cluster methods"
+author: "Nina van Gerwen (1860852)"
+date: "2023-01-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Comparing cluster methods
+
+### Describing the dataset
+
+For my dataset, I chose the 'Estimation of obesity levels based on eating habits and condition' 
+data, gained from the [UCI Machine Learning Repository](https://archive.ics.uci.edu/ml/datasets/Estimation+of+obesity+levels+based+on+eating+habits+and+physical+condition+#).
+The raw data contains a total of 2111 observations on 17 variables. The data was gained from
+individuals in Mexico, Peru and Colombia. The variables include demographic information (e.g., gender, age), variables related to their food intake (e.g., FAVC: frequent consumption of high caloric food, FCVC: frequency of consumption of vegetables, NCP: number of main meals, etc.) and finally
+variables related to physical condition (e.g., SCC: calories consumption monitoring, 
+FAF: physical activity frequency, etc.). A full description of all variables can be found
+[here](https://www-sciencedirect-com.proxy.library.uu.nl/science/article/pii/S2352340919306985?via%3Dihub).The goal of this dataset will be to properly cluster different obesity levels according
+to their food habits and physical activity, as coded in the variable NObeyesdad. Important to note is that only 23% of the data was collected, whilst 77% of the data was generated synthetically.
+
+
+```{r}
+## Load tidyverse for tidying later
+library(tidyverse)
+
+## Load the raw data
+raw_data <- read.csv("raw_data/Raw_Obesity_Data.csv")
+
+## Look at the structure of the data
+str(raw_data)
+```
+
+### Preprocessing the data
+
+```{r}
+## To process the data, we only change all
+## variables to their appropriate class through mutate
+processed_data <- raw_data %>%
+  mutate(Gender = as.factor(Gender),
+         Age = as.integer(round(Age)),
+         ## Round weight to one decimal
+         Weight = round(Weight, digits = 1),
+         ## Turn height in cm
+         Height = round(100 * Height),
+         ## Change name
+         Family_Occ = as.factor(family_history_with_overweight),
+         FAVC = as.factor(FAVC),
+         ## Note, for FCVC, NCP, CH2O, FAF and TUE we first make them
+         ## integers to round them and then make them factors
+         ## because otherwise they become factors with 100+ levels
+         FCVC = as.factor(as.integer(FCVC)),
+         NCP = as.factor(as.integer(NCP)),
+         CAEC = as.factor(CAEC),
+         SMOKE = as.factor(SMOKE),
+         CH2O = as.factor(as.integer(CH2O)),
+         SCC = as.factor(SCC),
+         FAF = as.factor(as.integer(FAF)),
+         TUE = as.factor(as.integer(TUE)),
+         CALC = as.factor(CALC),
+         MTRANS = as.factor(MTRANS),
+         NObeyesdad = as.factor(NObeyesdad)) %>%
+  ## We remove the variable with the long name that we had turned into
+  ## a more readable name
+  select(-family_history_with_overweight) %>%
+  ## Finally, we standardise/scale the numerical values also
+  mutate(Age = (Age - mean(Age)) / sd(Age),
+         Weight = (Weight - mean(Weight)) / sd(Weight),
+         Height = (Height - mean(Height)) / sd(Height))
+
+## And we save the processed data as a RDS file
+saveRDS(processed_data, file = "processed_data/processed_data.RDS")
+```
+
+Because the number of variables is not too large (only 16 excluding the outcome variable) and
+all variables seem to be theoretically relevant (e.g., for FAF: not having any physical
+activity can be an indicator of having a higher weight), I opted to keep all variables included.
+Note that this does not mean that I will use all variables in the final clustering model.
+
+### Two clustering methods
+
+To make an informed decision on which models might work, let us first
+look at some descriptive statistics of the data (not including the outcome variable,
+as that would be cheating) and visualizations.
+
+```{r}
+## Load patchwork package for plotting
+library(patchwork)
+
+summary(processed_data)
+
+vars <- processed_data %>% 
+  select_if(., is.numeric) %>% 
+  colnames(.) %>%
+  as.factor(.)
+
+par(mfrow = c(1,3))
+for(levels in vars){
+  processed_data %>%
+    select(all_of(levels)) %>%
+    as.matrix(.) %>%
+    as.numeric(.) %>%
+    hist(., main = as.character(levels))
+}
+
+hist_one <- 
+  ggplot(data = processed_data, aes(x = Weight)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 39) +
+  facet_wrap(facets = "MTRANS")
+
+hist_two <- 
+  ggplot(data = processed_data, aes(x = Weight)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 39) +
+  facet_wrap(facets = "FAF")
+
+hist_three <-
+  ggplot(data = processed_data, aes(x = Height)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 39) +
+  facet_wrap(facets = "CAEC")
+
+hist_four <- 
+  ggplot(data = processed_data, aes(x = Height)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 39) +
+  facet_wrap(facets = "SCC")
+
+hist_one + hist_two + hist_three + hist_four + plot_layout(2, 2)
+
+plot_one <- ggplot(processed_data, aes(x = Weight, y = Height, col = as.factor(CH2O))) +
+  geom_point() + theme(legend.position = "none")
+
+plot_two <- ggplot(processed_data, aes(x = Weight, y = Height, col = as.factor(FCVC))) +
+  geom_point() + theme(legend.position = "none")
+
+plot_three <- ggplot(processed_data, aes(x = Weight, y = Height, col = as.factor(SCC))) +
+  geom_point() + theme(legend.position = "none")
+
+plot_four <- ggplot(processed_data, aes(x = Weight, y = Height, col = as.factor(FAF))) +
+  geom_point() + theme(legend.position = "none")
+
+plot_five <- ggplot(processed_data, aes(x = Weight, y = Height, col = Gender)) +
+  geom_point() + theme(legend.position = "none")
+
+plot_six <- ggplot(processed_data, aes(x = Weight, y = Height, col = CALC)) +
+  geom_point() + theme(legend.position = "none")
+
+plot_seven <- ggplot(processed_data, aes(x = Weight, y = Height, col = MTRANS)) +
+  geom_point() + theme(legend.position = "none")
+
+plot_eight <- ggplot(processed_data, aes(x = Weight, y = Height, col = Family_Occ)) +
+  geom_point() + theme(legend.position = "none")
+
+plot_one + plot_two + plot_three + plot_four + plot_five + plot_six +
+  plot_seven + plot_eight + plot_layout(ncol = 2, nrow = 4)
+```
+
+Looking at the histograms, visual inspection shows that of the numeric variables, only height
+and weight seem to be normally distributed. Looking at their relative frequency
+given certain categories of variables, they still seem to be normally distributed.
+Therefore, I generalise these findings to assume that the data within each cluster is
+multivariate normally distributed. This means that Gaussian Mixture Models (GMM) might
+work well.
+
+Furthermore, I created eight scatterplots with Weight on the x-axis
+and Height on the y-axis. The plots show that the clusters do not seem to be circular
+in the space of data. This is another argument in favor of GMM.
+
+Therefore, I decided that GMM will be the first method. As for the second method,
+I chose for Hierarchical clustering. This is because, although we could easily
+use K-means clustering, as we know the number of categories in the outcome variable, I am curious
+whether hierarchical clustering will be able to properly show the number of correct
+categories in a dendrogram. For the Hierarchical clustering, I chose complete
+linkage in order to get a more balanced dendrogram with Euclidean distances. 
+
+To summarize, the two clustering methods I chose for the current dataset are:
+- Gaussian Mixture Models
+- Hierarchical clustering with Euclidean distances and complete linkage    
+
+
+### Applying the two methods
+
+```{r}
+## First, we get a training and test dataset
+set.seed(1248)
+
+processed_data$split <- sample(c("train", "test"), size = nrow(processed_data),
+                               replace = TRUE, prob = c(0.8, 0.2))
+
+train_set <- processed_data %>%
+  filter(split == "train") %>%
+  select(-split)
+
+test_set <- processed_data %>%
+  filter(split == "test") %>%
+  select(-split)
+
+## GMM:
+library(mclust)
+
+GMM_fit <- Mclust(train_set, G = 1:9)
+
+GMM_fit$BIC
+
+plot(GMM_fit, what = "BIC")
+
+plot(GMM_fit, what = "density")
+
+
+## Hierarchical clustering:
+library(ggdendro)
+distances <- dist(train_set, method = "euclidean")
+hclust_res <- hclust(distances, method = "complete")
+
+ggdendrogram(hclust_res) + coord_flip()
+```
+
+
+### Evaluating and comparing the two methods
+
+To evaluate and compare the two methods, I used...
+AIC/BIC/ values compared to true values / etc. 80 / 20%
+
+## Conclusion
+
+
+
+
+
+
