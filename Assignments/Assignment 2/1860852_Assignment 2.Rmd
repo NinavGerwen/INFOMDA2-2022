@@ -28,10 +28,11 @@ of main meals, etc.) and finally variables related to physical condition
 (e.g., SCC: calories consumption monitoring, FAF: physical activity
 frequency, etc.). A full description of all variables can be found
 [here](https://www-sciencedirect-com.proxy.library.uu.nl/science/article/pii/S2352340919306985?via%3Dihub).The
-goal of this dataset will be to properly cluster different obesity
-levels according to their food habits and physical activity, as coded in
-the variable NObeyesdad. Important to note is that only 23% of the data
-was collected, whilst 77% of the data was generated synthetically.
+goal of this dataset will be to properly cluster different weight
+categories according to their food habits and physical activity, as
+coded in the variable NObeyesdad. Important to note is that only 23% of
+the data was collected, whilst 77% of the data was generated
+synthetically. Furthermore, the dataset contains no missing information.
 
 ```{r}
 ## Load tidyverse for tidying later
@@ -89,8 +90,8 @@ Because the number of variables is not too large (only 16 excluding the
 outcome variable) and all variables seem to be theoretically relevant
 (e.g., for FAF: not having any physical activity can be an indicator of
 having a higher weight), I opted to keep all variables included. Note
-that this does not mean that I will use all variables in the final
-clustering model.
+that this does not necessarily mean that all variableswill be used in
+the clustering models.
 
 ### Two clustering methods
 
@@ -102,7 +103,9 @@ outcome variable, as that would be cheating) and visualizations.
 ## Load patchwork package for plotting
 library(patchwork)
 
-summary(processed_data)
+processed_data %>% 
+  select(-NObeyesdad) %>%
+  summary(.)
 
 vars <- processed_data %>% 
   select_if(., is.numeric) %>% 
@@ -168,17 +171,18 @@ plot_one + plot_two + plot_three + plot_four + plot_five + plot_six +
   plot_seven + plot_eight + plot_layout(ncol = 2, nrow = 4)
 ```
 
-Looking at the histograms, visual inspection shows that of the numeric
-variables, only height and weight seem to be normally distributed.
-Looking at their relative frequency given certain categories of
-variables, they still seem to be normally distributed. Therefore, I
-generalise these findings to assume that the data within each cluster is
-multivariate normally distributed. This means that Gaussian Mixture
-Models (GMM) might work well.
+Looking at the histograms, visual inspection shows that the numeric
+variables, height and weight seem to be normally distributed. Looking at
+their relative frequency given certain categories of variables, they
+still seem to be normally distributed. Therefore, I feel safe to
+generalise these findings to assume that the data within each cluster
+might be multivariate normally distributed. This means that Gaussian
+Mixture Models (GMM) might work well.
 
 Furthermore, I created eight scatterplots with Weight on the x-axis and
 Height on the y-axis. The plots show that the clusters do not seem to be
-circular, but instead elliptical, in the space of data. This is another argument in favor of GMM.
+circular, but instead elliptical, in the space of data. This is another
+argument in favor of GMM.
 
 Therefore, I decided that GMM will be the first method. As for the
 second method, I chose for Hierarchical clustering. This is because,
@@ -190,8 +194,12 @@ complete linkage in order to get a more balanced dendrogram with
 Euclidean distances.
 
 To summarize, the two clustering methods I chose for the current dataset
-are: - Gaussian Mixture Models - Hierarchical clustering with Euclidean
-distances and complete linkage
+are:
+
+-   Gaussian Mixture Modeling
+
+-   Agglomerative Hierarchical Clustering with euclidean distances and
+    complete linkage
 
 ### Applying the two methods
 
@@ -221,29 +229,35 @@ hclust_res <- hclust(distances, method = "complete")
 ggdendrogram(hclust_res) + coord_flip()
 ```
 
-The results of the two clustering method shows that the best fitting GMM are
-ones that allow for a varying shape (as all of the top three models start with a V).
-This is what we expected, due to the elliptical shape of the above plotted graphs.
-As for the hierarchical clustering method, we find that on the horizontal
-axis, the cut off for 7 clusters does not seem to be very far removed from 6. This
-might indicate that the method perhaps has issues discriminating between
-some clusters (for example between Overweight type I and II).
+The results of the two clustering method shows that the best fitting GMM
+are ones that allow for a varying shape (as all of the top three models
+start with a V). This is what we expected, due to the elliptical shape
+of the above plotted graphs. As for the hierarchical clustering method,
+we find that on the horizontal axis, the cut off for 7 clusters does not
+seem to be very far removed from 6. This might indicate that the method
+perhaps has issues discriminating between some clusters (for example
+between Overweight type I and II). Furthermore, due to the
+semi-categorical nature of many variables, euclidean distances might not
+have been the best choice.
 
 ### Evaluating and comparing the two methods
 
-To evaluate and compare the two methods, I will compare them on three factors, namely:
+To evaluate and compare the two methods, I will compare them on three
+factors, namely:
 
 1.  Cluster stability, as measured by computing 100 bootstrap samples
 
-2.  Internal indices, more specifically by computing the silhouette coefficient
-    for the two methods
+2.  Internal indices, more specifically by computing the silhouette
+    coefficient for the two methods
 
-3.  External validity, by investigating whether the predicted categories from the two
-    clustering methods are associated with their true category. Whether they are 
-    associated will be investigated through a $\chi^2$-test of independence and
-    the correlation coefficient, calculated through the Spearman-Brown formula.
-    
-Below, you find the implementation for all three factors for both models.
+3.  External validity, by investigating whether the predicted categories
+    from the two clustering methods are associated with their true
+    category. Whether they are associated will be investigated through a
+    $\chi^2$-test of independence and the correlation coefficient,
+    calculated through the Spearman-Brown formula.
+
+Below, you find the implementation for all three factors for both
+models.
 
 ```{r}
 ## Stability
@@ -289,8 +303,8 @@ mclust_boot <- train_set %>%
          CALC = as.numeric(CALC) - 1, 
          MTRANS = as.numeric(MTRANS) - 1,
          Family_Occ = as.numeric(Family_Occ) - 1) %>%
-  clusterboot(data = ., B = 100, count = FALSE,
-              clustermethod = noisemclustCBI, G = 7,
+  clusterboot(data = ., B = 100, count = FALSE, k = 7,
+              clustermethod = noisemclustCBI, G = 7, 
               multipleboot = FALSE, verbose = FALSE)
 
 mclust_boot$bootmean
@@ -338,8 +352,35 @@ cbind(processed_data$NObeyesdad, GMM_fit$classification) %>%
   cor(x = ., method = "spearman")
 ```
 
-The results of the comparison shows that 
+The three comparisons show that the Gaussian Mixture Model has: (a) a
+higher average stability for the Gaussian Mixture Model, (b) higher
+values on the average silhouette per cluster and (c) a higher external
+validity correlation value. Although the $\chi^2$-tests of independence
+was significant for both models, this might be due to a large sample
+size. Because looking at the correlation, we find that the clusters made
+by the Hierarchical Clustering method has a correlation of only 0.07
+with the true clusters. The Gaussian Mixture Model's predicted clusters
+instead had a correlation of 0.31. However, I would argue that the
+external validity for the Gaussian Mixture Model is still somewhat low.
 
 ## Conclusion
 
-
+Looking back at the two different clustering methods, I think a few
+things become clear. First and foremost, we can safely state that a
+Gaussian Mixture Model with elliptical shapes was able to outperform an
+agglomerative hierarchical clustering method, as shown by the comparison
+above. However, there are still many issues to be had with the Gaussian
+Mixture modelling. For example, many of the Gaussian Mixture Models were
+not able to converge (as seen by the NAs in the output). Furthermore,
+many of the variables that we used for the clustering method were of a
+categorical nature (or atleast, not quite on an interval measurement
+level). And for both models, this might have lead to issues. For the
+agglomerative clustering method, euclidean distances might not have been
+the best choice for example. Furthermore, since the variables are not
+completely on an interval measurement level, does it make sense for us
+to assume they follow a normal distribution? Perhaps it would have been
+better to compute a 'total score' made up by multiple of the categorical
+variables and use this instead. To summarise, although we were able to
+achieve some succes in our clustering methods, there were still many
+limitations we have to keep in mind and further research would be
+necessary in order to improve the predicted clusters.

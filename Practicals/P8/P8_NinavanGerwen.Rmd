@@ -1,0 +1,118 @@
+---
+title: 'Practical 8: Text Mining'
+author: "Nina van Gerwen (1860852)"
+date: "2023-01-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1: Introduction
+
+```{r}
+library(tidyverse)
+library(tidytext)
+library(tm)
+library(e1071)
+library(topicmodels)
+library(stringi)
+library(magrittr)
+```
+
+## 2: Vector Space Model: Document-Term Matrix
+
+### 2.1: Loading the data
+
+```{r}
+load("data/news_dataset.rda")
+head(df_final)
+```
+
+### 2.2: Finding out the categories and number of observations
+
+```{r}
+df_final %>% 
+  mutate(Category = as.factor(Category)) %>%
+  select(Category) %>% 
+  summary(.)
+```
+
+### 2.3: Converting into a Document-Term Matrix
+
+```{r}
+## To convert it into a DTM, first we preprocesses it into a corpus data
+## while also changing certain things
+corpusdata <- df_final %$%
+  ## Select the content
+  Content %>% 
+  ## Vectorsource and corpus it
+  VectorSource() %>% 
+  Corpus() %>% 
+  ## Then, through iconv, get rid of all non-UTF8 characters
+  tm_map(iconv, from="UTF-8", to="UTF-8", sub="") %>% 
+  ## And lowercase everything
+  tm_map(content_transformer(tolower)) %>% 
+  ## Remove the stopwords
+  tm_map(removeWords, stopwords()) %>% 
+  ## Strip any excess white space
+  tm_map(stripWhitespace) %>% 
+  ## Remove any punctiation
+  tm_map(removePunctuation) %>% 
+  ## And finally remove any numbers
+  tm_map(removeNumbers)
+
+## Then we make it a DTM
+dtm <- DocumentTermMatrix(docs)
+
+## And we can find the terms that have a frequency higher than 10 like this:
+frequent_terms <- findFreqTerms(dtm,lowfreq = 10,highfreq = Inf)
+```
+
+### 2.4: Splitting the data into training and test
+
+```{r}
+## To split the dataset, we sample from the indexes of the
+## original dataframe and state that we want 80% of the indexes sampled
+train_index <- sample(nrow(df_final),floor(0.8*nrow(df_final)))
+
+# And then the sampled indexes will be the training set
+train_data <- df_final[train_index,]
+## And the leftover indexes will be the test set
+test_data <- df_final[-train_index,]
+
+## And we do the same for the documents in the corpus data stuff
+train_corpus <- corpusdata[train_index]
+test_corpus <- corpusdata[-train_index]
+```
+
+
+### 2.5: Creating separate DTMs for the training and test set and converting them into dataframes
+
+```{r}
+## Select the train corpus
+train_dtm <- train_corpus %>%
+  ## Turn it into a DTM with only the frequent terms
+  DocumentTermMatrix(list(dictionary=frequent_terms)) %>% 
+  ## Then as matrix
+  as.matrix() %>%
+  ## Then as data frame
+  as.data.frame()
+
+## Do the same for test corpus
+test_dtm <- test_corpus %>% 
+  DocumentTermMatrix(list(dictionary=frequent_terms)) %>% 
+  as.matrix() %>% 
+  as.data.frame()
+```
+
+
+## 3: Topic modeling
+
+### 3.8: Applying the LDA function
+
+```{r}
+
+```
+
