@@ -1,0 +1,145 @@
+---
+title: "Practical 9: Text Mining Part 2"
+author: "Nina van Gerwen (1860852)"
+date: "2023-01-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1: Introduction 
+
+```{r}
+library(magrittr)  # for pipes
+library(tidyverse) # for tidy data and pipes
+library(ggplot2)   # for visualization
+library(qdap)      # provides parsing tools for preparing transcript data
+library(wordcloud) # to create pretty word clouds
+library(stringr)   # for regular expressions
+library(text2vec)  # for word embedding
+library(tidytext)  # for text mining
+library(tensorflow)# for recurrent neural network
+library(keras)     # for recurrent neural network
+```
+
+
+## 2: Word Embedding
+
+```{r}
+library(harrypotter)
+```
+
+
+### 2.1: Loading the first seven Harry Potter novels
+
+```{r}
+set.seed(1248)
+
+hp_books <- c("philosophers_stone", "chamber_of_secrets",
+              "prisoner_of_azkaban", "goblet_of_fire",
+              "order_of_the_phoenix", "half_blood_prince",
+              "deathly_hallows")
+
+hp_words <- list(
+  philosophers_stone,
+  chamber_of_secrets,
+  prisoner_of_azkaban,
+  goblet_of_fire,
+  order_of_the_phoenix,
+  half_blood_prince,
+  deathly_hallows) %>%
+  # name each list element
+  set_names(hp_books) %>%
+  # convert each book to a data frame and merge into a single data frame
+  map_df(as_tibble, .id = "book") %>%
+  # convert book to a factor
+  mutate(book = factor(book, levels = hp_books)) %>%
+  # remove empty chapters
+  filter(!is.na(value)) %>%
+  # create a chapter id column
+  group_by(book) %>%
+  mutate(chapter = row_number(book))
+
+head(hp_words)
+```
+
+
+### 2.2-3: Converting the list into a dataframe and tokenizing it and other preprocessing
+
+```{r}
+test <- hp_words %>%
+  ## Making it a data.frame
+  rbind.data.frame(.) %>%
+  ## Tokenizing the value column
+  unnest_tokens(., output = word, input = value) %>%
+  ## Filtering out the stopwords
+  filter(!word %in% stop_words$word)
+```
+
+
+### 2.4: Creating and pruning a vocabulary of unique terms
+
+```{r}
+## To create a vocabulary, we must first make the words a list
+test_two <- test$word %>% list() %>% 
+  ## Then itoken it
+  itoken() 
+
+test_three <- test_two %>%
+  ## Then create vocabulary
+  create_vocabulary() %>% 
+  ## And finally prune for terms that have a count of 5 or less
+  prune_vocabulary(., term_count_min = 5)
+  
+```
+
+
+### 2.5: Creating a token co-occurrence matrix (TCM)
+
+```{r}
+test_four <- test_three %>%
+  vocab_vectorizer()
+
+hp_tcm <- create_tcm(it = test_two, vectorizer = test_four, skip_grams_window = 5)
+```
+
+
+### 2.6: Using GlobalVectors to fit word vectors
+
+```{r}
+glove <- GlobalVectors$new(rank = 50, x_max = 10)
+
+test_five <- glove$fit_transform(hp_tcm, n_iter = 20, convergence_tol = 0.001)
+```
+
+### 2.7: Extracting word vectors and saving summation
+
+```{r}
+## Word vectors:
+
+## Summation:
+word_sums <- rowSums(test_five)
+```
+
+
+### 2.8: Finding most similar words to 'harry', 'death' and 'love'
+
+```{r}
+similarities <- sim2(x = test_five, y = test_five, method = "cosine")
+
+similarities["harry" , -which.max(similarities["harry" ,])] %>% which.max(.)
+
+similarities["death" , -which.max(similarities["death" ,])] %>% which.max(.)
+
+similarities["love" , -which.max(similarities["love" ,])] %>% which.max(.)
+```
+
+### 2.9: Adding and substracting vectors
+
+## 3: Sentiment classification with RNN
+
+### 3.10: Getting pre-trained word vectors
+
+
