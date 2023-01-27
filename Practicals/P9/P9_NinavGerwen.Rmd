@@ -15,7 +15,6 @@ knitr::opts_chunk$set(echo = TRUE)
 library(magrittr)  # for pipes
 library(tidyverse) # for tidy data and pipes
 library(ggplot2)   # for visualization
-library(qdap)      # provides parsing tools for preparing transcript data
 library(wordcloud) # to create pretty word clouds
 library(stringr)   # for regular expressions
 library(text2vec)  # for word embedding
@@ -118,16 +117,16 @@ test_five <- glove$fit_transform(hp_tcm, n_iter = 20, convergence_tol = 0.001)
 
 ```{r}
 ## Word vectors:
-
+hp_wv_context <- glove$components
 ## Summation:
-word_sums <- rowSums(test_five)
+hp_wv_sums <- test_five + t(hp_wv_context)
 ```
 
 
 ### 2.8: Finding most similar words to 'harry', 'death' and 'love'
 
 ```{r}
-similarities <- sim2(x = test_five, y = test_five, method = "cosine")
+similarities <- sim2(x = hp_wv_sums, method = "cosine", norm = "l2")
 
 similarities["harry" , -which.max(similarities["harry" ,])] %>% which.max(.)
 
@@ -142,4 +141,127 @@ similarities["love" , -which.max(similarities["love" ,])] %>% which.max(.)
 
 ### 3.10: Getting pre-trained word vectors
 
+### 3.10: Loading the pre-trained word vectors
+
+```{r}
+# load glove vectors
+vectors <- data.table::fread('data/glove.6B.300d.txt', data.table = F, encoding = 'UTF-8')
+colnames(vectors) <- c('word', paste('dim',1:300,sep = '_'))
+
+# convert vectors to dataframe
+#vectors <- as_tibble(vectors)
+```
+
+
+### 3.11: IMDb Movie Review dataset
+
+```{r}
+imdb_data <- movie_review %>% as.data.frame()
+```
+
+
+### 3.12: Defining hyperparameters
+
+```{r}
+max_len <- 60
+max_words <- 10000
+emb_size <- 300
+```
+
+
+### 3.13-14: Tokenizing, sequencing and padding sequences on imdb data 
+
+```{r}
+##
+tok <- text_tokenizer(num_words = max_words) %>% 
+  fit_text_tokenizer(imdb_data$review)
+
+##
+seq_data <- texts_to_sequences(tok, texts = imdb_data$review) %>%
+  pad_sequences(maxlen = max_len)
+```
+
+
+### 3.15: Transforming padded sequences into a dataframe
+
+```{r}
+seq_data <- seq_data %>% as.data.frame(.)
+```
+
+
+### 3.16: Joining dataframe of sequences and GloVe pretrained word vectors
+
+```{r}
+
+embs <- unlist(tok$word_index) %>%
+  data.frame(stringsAsFactors = F) %>%
+  rownames_to_column("word") %>%
+  dplyr::select(word = word, key = ".") %>%
+  arrange(key) %>%
+  filter(row_number() <= max_words) %>%
+  left_join(vectors) %>%
+  dplyr::select(dplyr::starts_with("dim")) %>%
+  {\(x) replace(x, is.na(x), 0)}() %>%
+  as.matrix()
+
+```
+
+
+### 3.17: Extracting outcome variable from the sentiment column
+
+```{r}
+y_train <- movie_review$sentiment
+```
+
+
+### 3.18: Running an RNN model
+
+```{r}
+# Use Keras Functional API 
+input <- layer_input(shape = list(max_len), name = "input")
+
+model <- input %>%
+  layer_embedding(input_dim = max_words, output_dim = emb_size, input_length = max_len,
+                  # put weights into list and do not allow training
+                  weights = list(embs), trainable = FALSE) %>%
+  ## Randomly remove 20% of the links for regularisation
+  layer_spatial_dropout_1d(rate = 0.2) %>%
+  ## This is the recurrent neural network layer
+  bidirectional(
+    layer_gru(units = 80, return_sequences = TRUE)
+)
+
+## And we specify two pooling layers to reduce dimensionality
+max_pool <- model %>% layer_global_max_pooling_1d()
+ave_pool <- model %>% layer_global_average_pooling_1d()
+
+## And we state that the output is gained by first
+## concatenating the two pooling layers, and then finally
+## a dense layer with 1 unit and sigmoid activation (as our output is 0s and 1s)
+output <- layer_concatenate(list(ave_pool, max_pool)) %>%
+  layer_dense(units = 1, activation = "sigmoid")
+
+## Then finally, we have specified the whole model
+model <- keras_model(input, output)
+
+# model summary
+model
+```
+
+
+### 3.19: Compiling the model with 'adam' optimizer and binary crossentropy loss
+
+```{r}
+model %>% compile(., optimizer = "adam", loss = "binary_crossentropy")
+```
+
+
+### 3.20: Fitting the model
+
+```{r}
+set.seed(1248)
+
+##fit(model, seq_data, y_train, epochs = 10, batch_size = 32, 
+##              validation_split = .2)
+```
 
